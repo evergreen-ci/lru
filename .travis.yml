@@ -7,5 +7,6 @@ go:
   - 1.4
   - 1.6
   - 1.7
+  - tip
 install: []
 script: make vendor build lint test
