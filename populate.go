@@ -14,7 +14,7 @@ import (
 // otherwise all directories are included in the cache. When including
 // directories in the cache, lru includes the aggregate size of files
 // in the directory.
-func DirectoryContents(path string, skipDir bool) (*LruCache, error) {
+func DirectoryContents(path string, skipDir bool) (*Cache, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, errors.Wrapf(err, "problem getting absolute path for '%s'", path)
@@ -52,7 +52,7 @@ func DirectoryContents(path string, skipDir bool) (*LruCache, error) {
 
 // TreeContents adds all file system items, excluding directories, to
 // a cache object.
-func TreeContents(root string) (*LruCache, error) {
+func TreeContents(root string) (*Cache, error) {
 	absPath, err := filepath.Abs(root)
 	if err != nil {
 		return nil, errors.Wrapf(err, "problem getting absolute path for '%s'", root)

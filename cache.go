@@ -16,9 +16,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-// LruCache provides tools to maintain an cache of file system
+// Cache provides tools to maintain an cache of file system
 // objects, maintained on a least-recently-used basis.
-type LruCache struct {
+type Cache struct {
 	size  int
 	heap  *fileObjectHeap
 	mutex sync.Mutex
@@ -28,14 +28,14 @@ type LruCache struct {
 // NewCache returns an initalized but unpopulated cache. Use the
 // DirectoryContents and TreeContents constructors to populate a
 // cache.
-func NewCache() *LruCache {
-	return &LruCache{
+func NewCache() *Cache {
+	return &Cache{
 		table: make(map[string]*FileObject),
 	}
 }
 
 // Size returns the total size of objects in the cache.
-func (c *LruCache) Size() int {
+func (c *Cache) Size() int {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -43,14 +43,18 @@ func (c *LruCache) Size() int {
 }
 
 // Count returns the total number of objects in the cache.
-func (c *LruCache) Count() int {
+func (c *Cache) Count() int {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	return len(*c.heap)
 }
 
-func (c *LruCache) AddStat(fn string, stat os.FileInfo) error {
+// AddStat takes the full (absolute) path to a file and an os.FileInfo
+// object and and constructs the FileObject and adds it to the
+// cache. AddStat returns an error if the stat is invalid, or the file
+// already exists in the chace.
+func (c *Cache) AddStat(fn string, stat os.FileInfo) error {
 	if stat == nil {
 		return errors.Errorf("file %s does not have a valid stat", fn)
 	}
@@ -73,7 +77,11 @@ func (c *LruCache) AddStat(fn string, stat os.FileInfo) error {
 	return errors.Wrapf(c.Add(f), "problem adding file (%s) by info", fn)
 }
 
-func (c *LruCache) AddFile(fn string) error {
+// AddFile takes a fully qualified filename and adds it to the cache,
+// returning an error if the file does not exist. AddStat returns an
+// error if the stat is invalid, or the file already exists in the
+// cache.
+func (c *Cache) AddFile(fn string) error {
 	stat, err := os.Stat(fn)
 	if os.IsNotExist(err) {
 		return errors.Wrapf(err, "file %s does not exist", fn)
@@ -82,7 +90,9 @@ func (c *LruCache) AddFile(fn string) error {
 	return errors.Wrap(c.AddStat(fn, stat), "problem adding file")
 }
 
-func (c *LruCache) Add(f *FileObject) error {
+// Add takes a defined FileObject and adds it to the cache, returning
+// an error if the object already exists.
+func (c *Cache) Add(f *FileObject) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -98,7 +108,9 @@ func (c *LruCache) Add(f *FileObject) error {
 	return nil
 }
 
-func (c *LruCache) Update(f *FileObject) error {
+// Update updates an existing item in the cache, returning an error if
+// it is not in the cache.
+func (c *Cache) Update(f *FileObject) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -118,7 +130,8 @@ func (c *LruCache) Update(f *FileObject) error {
 	return nil
 }
 
-func (c *LruCache) Pop() (*FileObject, error) {
+// Pop removes and returns the oldest object in the cache.
+func (c *Cache) Pop() (*FileObject, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -133,7 +146,9 @@ func (c *LruCache) Pop() (*FileObject, error) {
 	return f, nil
 }
 
-func (c *LruCache) Get(path string) (*FileObject, error) {
+// Get returns an item from the cache by name. This does not impact
+// the item's position in the cache.
+func (c *Cache) Get(path string) (*FileObject, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 

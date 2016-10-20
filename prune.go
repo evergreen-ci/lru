@@ -8,7 +8,7 @@ import (
 // Prune removes files (when dryRun is false), from the file system
 // until the total size of the cache is less than the maxSize (in
 // bytes.)
-func (c *LruCache) Prune(maxSize int, dryRun bool) error {
+func (c *Cache) Prune(maxSize int, dryRun bool) error {
 	catcher := grip.NewCatcher()
 
 	for {
@@ -29,7 +29,7 @@ func (c *LruCache) Prune(maxSize int, dryRun bool) error {
 	return catcher.Resolve()
 }
 
-func (c *LruCache) underQuota(maxSize int) bool {
+func (c *Cache) underQuota(maxSize int) bool {
 	if c.Count() == 0 {
 		grip.Info("there are no items in the cache")
 		return true
@@ -45,7 +45,7 @@ func (c *LruCache) underQuota(maxSize int) bool {
 	return false
 }
 
-func (c *LruCache) prunePass(dryRun bool) error {
+func (c *Cache) prunePass(dryRun bool) error {
 	f, err := c.Pop()
 	if err != nil {
 		return errors.Wrap(err, "problem retrieving item from cache")
