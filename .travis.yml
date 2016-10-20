@@ -7,5 +7,5 @@ go:
   - 1.4
   - 1.6
   - 1.7
-install:[]
+install: []
 script: make vendor build test
