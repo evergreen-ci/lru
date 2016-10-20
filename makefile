@@ -57,7 +57,10 @@ $(buildDir)/run-linter:buildscripts/run-linter.go $(buildDir)/.lintSetup
 $(buildDir)/.lintSetup:$(lintDeps)
 	@-$(gopath)/bin/gometalinter --install >/dev/null && touch $@
 # end dependency installation tools
+<<<<<<< HEAD
 
+=======
+>>>>>>> cleanup cruft from makefile
 
 # userfacing targets for basic build and development operations
 lint:$(buildDir)/output.lint
