@@ -7,7 +7,5 @@ go:
   - 1.4
   - 1.6
   - 1.7
-install:
-  - make lint-deps
-  - make vendor
-script: make build lint test
+install:[]
+script: make vendor build test
