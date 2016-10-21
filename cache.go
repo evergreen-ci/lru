@@ -20,7 +20,7 @@ import (
 // objects, maintained on a least-recently-used basis.
 type Cache struct {
 	size  int
-	heap  *fileObjectHeap
+	heap  fileObjectHeap
 	mutex sync.Mutex
 	table map[string]*FileObject
 }
@@ -47,7 +47,7 @@ func (c *Cache) Count() int {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	return len(*c.heap)
+	return len(c.heap)
 }
 
 // AddStat takes the full (absolute) path to a file and an os.FileInfo
@@ -103,7 +103,8 @@ func (c *Cache) Add(f *FileObject) error {
 
 	c.size += f.Size
 	c.table[f.Path] = f
-	c.heap.Push(f)
+
+	heap.Push(&c.heap, f)
 
 	return nil
 }
@@ -125,7 +126,7 @@ func (c *Cache) Update(f *FileObject) error {
 
 	f.index = existing.index
 	c.table[f.Path] = f
-	heap.Fix(c.heap, f.index)
+	heap.Fix(&c.heap, f.index)
 
 	return nil
 }
@@ -139,7 +140,7 @@ func (c *Cache) Pop() (*FileObject, error) {
 		return nil, errors.New("cache listing is empty")
 	}
 
-	f := c.heap.Pop().(*FileObject)
+	f := heap.Pop(&c.heap).(*FileObject)
 	c.size -= f.Size
 	delete(c.table, f.Path)
 
