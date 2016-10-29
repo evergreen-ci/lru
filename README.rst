@@ -51,6 +51,25 @@ size: ::
 The exclusion parameter makes it possible to exclude matching files
 from the cache as needed.
 
+Timestamps
+----------
+
+lru ages items out of the cache on the basis of the *mtime*, or last
+modification time. This is the most reliable timestamp available
+given the differences in filesystem configuration: other timing
+information is platform dependent, and not reliably maintained.
+
+While *access time* (``atime``) seems a more likely candidate for an
+LRU cache, it is common practice to mount most filesystems with the
+"no-atime" option, for read-only file systems, the default "relatime"
+(relative atime,) will commonly update the ``atime`` value is only
+updated once a day.
+
+The downside of using ``mtime``, is that normal access operations will
+not update the timestamp, which means your cache access operations
+should explicitly update the ``mtime`` of the file, using the
+``touch`` command or an equivalent utility or operation.
+
 Documentation
 -------------
 
