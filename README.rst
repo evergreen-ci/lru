@@ -2,10 +2,54 @@
 ``lru`` -- File System LRU Cache Tool
 =====================================
 
+.. image:: https://travis-ci.org/tychoish/lru.svg?branch=master
+    :target: https://travis-ci.org/tychoish/lru
+
 Overview
 --------
 
 lru is a tool for pruning file system caches based on access time.
+
+Use
+---
+
+Begin by downloading the package: ::
+
+  go get -u github.com/tychoish/lru
+
+Then, in your project import: ::
+
+  import "github.com/tychoish/lru"
+
+Create a cache. You can either instantiate the cache manually and add
+objects directly using the cache API, or more likely with either the
+`DirectoryContents <>`_ or `TreeContents <>`_ constructors. All three
+methods are below:
+
+   cache, err := TreeContents(<path>)
+   cache, err := DirectoryContents(<path>)
+
+   cache := NewCache()
+
+Internally the cache stores items as ``FileObject`` instances, which
+track the size, update time and fully qualified path of the
+object. You can add these objects to the cache using the ``Add()``
+method, or just use the ``AddFile`` helper, as in: ::
+
+  err := cache.AddFile(<path>)
+
+The ``Size()`` and ``Count()`` methods provide access to the current
+state of the cache and the ``Pop()`` method to remove the oldest item
+in the cache, but you can also use the ``Prune()`` method to remove
+the oldest files until the cache, until the cache reaches a specific
+size: ::
+
+  // cache.Prune(<int>, <[]string{}>, <bool>)
+
+  err := cache.Prune(<maxSize>, []string{<exclusions>}, <dryRun>)
+
+The exclusion parameter makes it possible to exclude matching files
+from the cache as needed.
 
 Documentation
 -------------
