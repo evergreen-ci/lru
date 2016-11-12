@@ -23,8 +23,9 @@ Then, in your project import: ::
 
 Create a cache. You can either instantiate the cache manually and add
 objects directly using the cache API, or more likely with either the
-`DirectoryContents <>`_ or `TreeContents <>`_ constructors. All three
-methods are below:
+`DirectoryContents <https://godoc.org/github.com/tychoish/lru#DirectoryContents>`_
+or `TreeContents <https://godoc.org/github.com/tychoish/lru#TreeContents>`_
+constructors. All three methods are below: ::
 
    cache, err := TreeContents(<path>)
    cache, err := DirectoryContents(<path>)
