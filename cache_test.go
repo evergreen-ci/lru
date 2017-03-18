@@ -8,10 +8,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/mongodb/grip"
 	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/tychoish/grip"
 )
 
 type CacheSuite struct {
