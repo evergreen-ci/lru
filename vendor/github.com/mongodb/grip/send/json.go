@@ -11,7 +11,7 @@ func NewJSONConsoleLogger(name string, l LevelInfo) (Sender, error) {
 // MakeJSONConsoleLogger returns an un-configured JSON console logging
 // instance.
 func MakeJSONConsoleLogger() Sender {
-	s := MakeNative()
+	s := MakePlainLogger()
 	_ = s.SetFormatter(MakeJSONFormatter())
 
 	return s
@@ -33,7 +33,7 @@ func NewJSONFileLogger(name, file string, l LevelInfo) (Sender, error) {
 // MakeJSONFileLogger creates an un-configured JSON logger that writes
 // output to the specified file.
 func MakeJSONFileLogger(file string) (Sender, error) {
-	s, err := MakeFileLogger(file)
+	s, err := MakePlainFileLogger(file)
 	if err != nil {
 		return nil, err
 	}

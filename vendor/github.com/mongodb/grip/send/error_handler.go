@@ -3,7 +3,6 @@ package send
 import (
 	"log"
 
-	"github.com/mongodb/grip/level"
 	"github.com/mongodb/grip/message"
 )
 
@@ -23,13 +22,13 @@ func ErrorHandlerFromLogger(l *log.Logger) ErrorHandler {
 	}
 }
 
+// ErrorHandlerFromSender wraps an existing Sender for sending error messages.
 func ErrorHandlerFromSender(s Sender) ErrorHandler {
 	return func(err error, m message.Composer) {
 		if err == nil {
 			return
 		}
 
-		s.Send(message.NewErrorMessage(level.Error, err))
-		s.Send(m)
+		s.Send(message.WrapError(err, m))
 	}
 }

@@ -1,6 +1,7 @@
 package slogger
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -51,7 +52,9 @@ func (a *appenderSender) Name() string                             { return a.na
 func (a *appenderSender) SetName(n string)                         { a.name = n }
 func (a *appenderSender) Level() send.LevelInfo                    { return a.level }
 func (a *appenderSender) SetErrorHandler(send.ErrorHandler) error  { return nil }
+func (a *appenderSender) ErrorHandler() send.ErrorHandler          { return nil }
 func (a *appenderSender) SetFormatter(send.MessageFormatter) error { return nil }
+func (a *appenderSender) Formatter() send.MessageFormatter         { return nil }
 func (a *appenderSender) SetLevel(l send.LevelInfo) error {
 	if !l.Valid() {
 		return fmt.Errorf("level settings are not valid: %+v", l)
@@ -62,7 +65,7 @@ func (a *appenderSender) SetLevel(l send.LevelInfo) error {
 }
 
 func (a *appenderSender) Send(m message.Composer) {
-	if a.level.ShouldLog(m) {
+	if a.Level().ShouldLog(m) {
 		log, ok := m.(*Log)
 		if ok {
 			_ = a.appender.Append(log)
@@ -71,3 +74,5 @@ func (a *appenderSender) Send(m message.Composer) {
 		}
 	}
 }
+
+func (a *appenderSender) Flush(_ context.Context) error { return nil }

@@ -2,10 +2,12 @@ package send
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/mail"
 	"net/smtp"
@@ -38,7 +40,7 @@ func NewSMTPLogger(opts *SMTPOptions, l LevelInfo) (Sender, error) {
 	return s, nil
 }
 
-// MakeSMTPLoger constructs an unconfigured (e.g. without level information)
+// MakeSMTPLogger constructs an unconfigured (e.g. without level information)
 // SMTP Sender implementation that delivers mail for every loggable message.
 // The configuration of the outgoing SMTP server, and the formatting of the
 // log message is handled by the SMTPOptions structure, which you must use
@@ -49,6 +51,7 @@ func MakeSMTPLogger(opts *SMTPOptions) (Sender, error) {
 	}
 
 	s := &smtpLogger{
+		Base: NewBase(opts.Name),
 		opts: opts,
 	}
 
@@ -58,7 +61,7 @@ func MakeSMTPLogger(opts *SMTPOptions) (Sender, error) {
 	}
 
 	s.reset = func() {
-		fallback.SetPrefix(fmt.Sprintf("[%s]", s.Name()))
+		fallback.SetPrefix(fmt.Sprintf("[%s] ", s.Name()))
 	}
 
 	s.SetName(opts.Name)
@@ -67,14 +70,14 @@ func MakeSMTPLogger(opts *SMTPOptions) (Sender, error) {
 }
 
 func (s *smtpLogger) Send(m message.Composer) {
-	if !s.level.ShouldLog(m) {
-		return
-	}
-
-	if err := s.opts.sendMail(m); err != nil {
-		s.errHandler(err, m)
+	if s.Level().ShouldLog(m) {
+		if err := s.opts.sendMail(m); err != nil {
+			s.ErrorHandler()(err, m)
+		}
 	}
 }
+
+func (s *smtpLogger) Flush(_ context.Context) error { return nil }
 
 ///////////////////////////////////////////////////////////////////////////
 //
@@ -94,7 +97,7 @@ func (s *smtpLogger) Send(m message.Composer) {
 // options. You must also set at least one recipient address using the
 // AddRecipient or AddRecipients functions. You can add or reset the
 // recipients after configuring the options or the sender.
-type SMTPOptions struct {
+type SMTPOptions struct { // nolint
 	// Name controls both the name of the logger, and the name on
 	// the from header field.
 	Name string
@@ -137,7 +140,7 @@ type SMTPOptions struct {
 	MessageAsSubject              bool
 	PlainTextContents             bool
 
-	client   *smtp.Client
+	client   smtpClient
 	fromAddr *mail.Address
 	toAddrs  []*mail.Address
 	mutex    sync.Mutex
@@ -170,7 +173,7 @@ func (o *SMTPOptions) AddRecipient(name, address string) error {
 	return nil
 }
 
-// AddRecpients accepts one or more string that can be, itself, comma
+// AddRecipients accepts one or more string that can be, itself, comma
 // separated lists of email addresses, which are then added to the
 // recipients for the logger.
 func (o *SMTPOptions) AddRecipients(addresses ...string) error {
@@ -197,6 +200,10 @@ func (o *SMTPOptions) AddRecipients(addresses ...string) error {
 // is not valid. The constructor for the SMTP sender calls this method
 // to make sure that options struct is valid before initiating the sender.
 func (o *SMTPOptions) Validate() error {
+	if o == nil {
+		return errors.New("must specify non-nil SMTP options")
+	}
+
 	o.mutex.Lock()
 	defer o.mutex.Unlock()
 
@@ -211,27 +218,7 @@ func (o *SMTPOptions) Validate() error {
 	}
 
 	if o.client == nil {
-		var err error
-		if o.UseSSL {
-			var tlsCon *tls.Conn
-			tlsCon, err = tls.Dial("tcp", fmt.Sprintf("%v:%v", o.Server, o.Port), &tls.Config{})
-			if err != nil {
-				return err
-			}
-			o.client, err = smtp.NewClient(tlsCon, o.Server)
-		} else {
-			o.client, err = smtp.Dial(fmt.Sprintf("%v:%v", o.Server, o.Port))
-		}
-
-		if err != nil {
-			return err
-		}
-
-		if o.Username != "" {
-			if err = o.client.Auth(smtp.PlainAuth("", o.Username, o.Password, o.Server)); err != nil {
-				return err
-			}
-		}
+		o.client = &smtpClientImpl{}
 	}
 
 	if o.GetContents == nil {
@@ -303,28 +290,63 @@ func (o *SMTPOptions) sendMail(m message.Composer) error {
 	o.mutex.Lock()
 	defer o.mutex.Unlock()
 
-	if len(o.toAddrs) == 0 {
-		return fmt.Errorf("no recipients specified, cannot send mail")
+	if err := o.client.Create(o); err != nil {
+		return err
+	}
+	defer o.client.Close()
 
+	var subject, body string
+	toAddrs := o.toAddrs
+	fromAddr := o.fromAddr
+	isPlainText := o.PlainTextContents
+	var headers map[string][]string
+
+	if emailMsg, ok := m.Raw().(*message.Email); ok {
+		var err error
+		if len(emailMsg.From) != 0 {
+			fromAddr, err = mail.ParseAddress(emailMsg.From)
+			if err != nil {
+				return fmt.Errorf("invalid from address: %+v", err)
+			}
+		}
+
+		toAddrs = make([]*mail.Address, len(emailMsg.Recipients))
+
+		for i := range emailMsg.Recipients {
+			toAddrs[i], err = mail.ParseAddress(emailMsg.Recipients[i])
+			if err != nil {
+				return fmt.Errorf("invalid recipient: %+v", err)
+			}
+		}
+
+		subject = emailMsg.Subject
+		body = emailMsg.Body
+		isPlainText = emailMsg.PlainTextContents
+		headers = emailMsg.Headers
+	}
+	if fromAddr == nil {
+		return fmt.Errorf("no from address specified, cannot send mail")
+	}
+	if len(toAddrs) == 0 {
+		return fmt.Errorf("no recipients specified, cannot send mail")
 	}
 
-	if err := o.client.Mail(o.From); err != nil {
-		return fmt.Errorf("Error establishing mail sender (%s): %+v", o.From, err)
+	if err := o.client.Mail(fromAddr.Address); err != nil {
+		return fmt.Errorf("error establishing mail sender (%s): %+v", fromAddr, err)
 	}
 
 	var err error
 	var errs []string
-	var recpients []string
+	var recipients []string
 
 	// Set the recipients
-	for _, target := range o.toAddrs {
-		addr := target.String()
-		if err = o.client.Rcpt(addr); err != nil {
+	for _, target := range toAddrs {
+		if err = o.client.Rcpt(target.Address); err != nil {
 			errs = append(errs,
-				fmt.Sprintf("Error establishing mail recipient (%s): %+v", addr, err))
+				fmt.Sprintf("Error establishing mail recipient (%s): %+v", target.String(), err))
 			continue
 		}
-		recpients = append(recpients, addr)
+		recipients = append(recipients, target.String())
 	}
 	if len(errs) > 0 {
 		return errors.New(strings.Join(errs, "; "))
@@ -337,19 +359,36 @@ func (o *SMTPOptions) sendMail(m message.Composer) error {
 	}
 	defer wc.Close()
 
-	subject, body := o.GetContents(o, m)
+	if len(subject) == 0 && len(body) == 0 {
+		subject, body = o.GetContents(o, m)
+	}
 
 	contents := []string{
-		fmt.Sprintf("From: %s", o.fromAddr.String()),
-		fmt.Sprintf("To: %s", strings.Join(recpients, ", ")),
+		fmt.Sprintf("From: %s", fromAddr.String()),
+		fmt.Sprintf("To: %s", strings.Join(recipients, ", ")),
 		fmt.Sprintf("Subject: %s", subject),
 		"MIME-Version: 1.0",
 	}
 
-	if o.PlainTextContents {
-		contents = append(contents, "Content-Type: text/plain; charset=\"utf-8\"")
-	} else {
-		contents = append(contents, "Content-Type: text/html; charset=\"utf-8\"")
+	skipContentType := false
+	for k, v := range headers {
+		if k == "To" || k == "From" || k == "Subject" || k == "Content-Transfer-Encoding" {
+			continue
+		}
+		if k == "Content-Type" {
+			skipContentType = true
+		}
+		for i := range v {
+			contents = append(contents, fmt.Sprintf("%s: %s", k, v[i]))
+		}
+	}
+
+	if !skipContentType {
+		if isPlainText {
+			contents = append(contents, "Content-Type: text/plain; charset=\"utf-8\"")
+		} else {
+			contents = append(contents, "Content-Type: text/html; charset=\"utf-8\"")
+		}
 	}
 
 	contents = append(contents,
@@ -359,4 +398,59 @@ func (o *SMTPOptions) sendMail(m message.Composer) error {
 	// write the body
 	_, err = bytes.NewBufferString(strings.Join(contents, "\r\n")).WriteTo(wc)
 	return err
+}
+
+////////////////////////////////////////////////////////////////////////
+//
+// interface mock for testability
+//
+////////////////////////////////////////////////////////////////////////
+
+type smtpClient interface {
+	Create(*SMTPOptions) error
+	Mail(string) error
+	Rcpt(string) error
+	Data() (io.WriteCloser, error)
+	Close() error
+}
+
+type smtpClientImpl struct {
+	*smtp.Client
+}
+
+func (c *smtpClientImpl) Create(opts *SMTPOptions) error {
+	var err error
+	c.Client, err = smtp.Dial(fmt.Sprintf("%v:%v", opts.Server, opts.Port))
+	if err != nil {
+		return err
+	}
+
+	if opts.UseSSL {
+		config := &tls.Config{ServerName: opts.Server}
+		err = c.Client.StartTLS(config)
+
+	} else {
+		var hostname string
+		hostname, err = os.Hostname()
+		if err != nil {
+			return err
+		}
+
+		err = c.Hello(hostname)
+	}
+	if err != nil {
+		return err
+	}
+
+	if opts.Username != "" {
+		if err = c.Client.Auth(smtp.PlainAuth("", opts.Username, opts.Password, opts.Server)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *smtpClientImpl) Close() error {
+	return c.Client.Close()
 }

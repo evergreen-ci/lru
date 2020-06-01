@@ -1,6 +1,7 @@
 package send
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -18,8 +19,7 @@ const (
 )
 
 type slackJournal struct {
-	opts   *SlackOptions
-	client *slack.Slack
+	opts *SlackOptions
 	*Base
 }
 
@@ -31,16 +31,17 @@ func NewSlackLogger(opts *SlackOptions, token string, l LevelInfo) (Sender, erro
 	}
 
 	s := &slackJournal{
-		opts:   opts,
-		client: slack.New(token),
-		Base:   NewBase(opts.Name),
+		opts: opts,
+		Base: NewBase(opts.Name),
 	}
+
+	s.opts.client.Create(token)
 
 	if err := s.SetLevel(l); err != nil {
 		return nil, err
 	}
 
-	if _, err := s.client.AuthTest(); err != nil {
+	if _, err := s.opts.client.AuthTest(); err != nil {
 		return nil, fmt.Errorf("slack authentication error: %v", err)
 	}
 
@@ -50,7 +51,7 @@ func NewSlackLogger(opts *SlackOptions, token string, l LevelInfo) (Sender, erro
 	}
 
 	s.reset = func() {
-		fallback.SetPrefix(fmt.Sprintf("[%s]", s.Name()))
+		fallback.SetPrefix(fmt.Sprintf("[%s] ", s.Name()))
 	}
 
 	s.SetName(opts.Name)
@@ -65,28 +66,45 @@ func MakeSlackLogger(opts *SlackOptions) (Sender, error) {
 	token := os.Getenv(slackClientToken)
 	if token == "" {
 		return nil, fmt.Errorf("environment variable %s not defined, cannot create slack client",
-			"foo")
+			slackClientToken)
 	}
 
 	return NewSlackLogger(opts, token, LevelInfo{level.Trace, level.Trace})
 }
 
 func (s *slackJournal) Send(m message.Composer) {
-	if !s.level.ShouldLog(m) {
-		return
-	}
+	if s.Level().ShouldLog(m) {
+		s.Base.mutex.RLock()
+		defer s.Base.mutex.RUnlock()
 
-	msg := m.String()
+		var msg string
+		var params *slack.ChatPostMessageOpt
+		channel := s.opts.Channel
 
-	s.Base.mutex.RLock()
-	defer s.Base.mutex.RUnlock()
+		if slackMsg, ok := m.Raw().(*message.Slack); ok {
+			channel = slackMsg.Target
+			msg, params = slackMsg.Msg, &slack.ChatPostMessageOpt{
+				Attachments: slackMsg.Attachments,
+			}
 
-	params := s.opts.getParams(m)
-	if err := s.client.ChatPostMessage(s.opts.Channel, msg, params); err != nil {
-		s.errHandler(err, message.NewFormattedMessage(m.Priority(),
-			"%s: %s\n", params.Attachments[0].Fallback, msg))
+		} else {
+			msg, params = s.opts.produceMessage(m)
+		}
+
+		params.IconUrl = s.opts.IconURL
+		params.Username = s.opts.Username
+		if len(params.Username) != 0 || len(params.IconUrl) != 0 {
+			params.AsUser = false
+		}
+
+		if err := s.opts.client.ChatPostMessage(channel, msg, params); err != nil {
+			s.ErrorHandler()(err, message.NewFormattedMessage(m.Priority(),
+				"%s\n", msg))
+		}
 	}
 }
+
+func (s *slackJournal) Flush(_ context.Context) error { return nil }
 
 // SlackOptions configures the behavior for constructing messages sent
 // to slack.
@@ -95,9 +113,13 @@ type SlackOptions struct {
 	// options for the sender, and control where the messages are
 	// sent, which hostname the sender reports itself as, and the
 	// name of the journaler.
-	Channel  string
-	Hostname string
-	Name     string
+	Channel  string `bson:"channel" json:"channel" yaml:"channel"`
+	Hostname string `bson:"hostname" json:"hostname" yaml:"hostname"`
+	Name     string `bson:"name" json:"name" yaml:"name"`
+	// Username and IconURL allow the slack sender to set a display
+	// name and icon. Setting either parameter will force as_user to false.
+	Username string `bson:"username" json:"username" yaml:"username"`
+	IconURL  string `bson:"icon_url" json:"icon_url" yaml:"icon_url"`
 
 	// Configuration options for appending structured data to the
 	// message sent to slack. The BasicMetadata option appends
@@ -106,27 +128,28 @@ type SlackOptions struct {
 	// Composer returns a message.Fields map. If you specify a set
 	// of fields in the FieldsSet value, only those fields will be
 	// attached to the message.
-	BasicMetadata bool
-	Fields        bool
-	FieldsSet     map[string]struct{}
-	mutex         sync.RWMutex
+	BasicMetadata bool            `bson:"add_basic_metadata" json:"add_basic_metadata" yaml:"add_basic_metadata"`
+	Fields        bool            `bson:"use_fields" json:"use_fields" yaml:"use_fields"`
+	AllFields     bool            `bson:"all_fields" json:"all_fields" yaml:"all_fields"`
+	FieldsSet     map[string]bool `bson:"fields" json:"fields" yaml:"fields"`
+
+	client slackClient
+	mutex  sync.RWMutex
 }
 
 func (o *SlackOptions) fieldSetShouldInclude(name string) bool {
-	if name == "time" {
+	if name == "time" || name == "metadata" {
 		return false
 	}
 
 	o.mutex.RLock()
 	defer o.mutex.RUnlock()
 
-	if o.FieldsSet == nil {
+	if o.AllFields || o.FieldsSet == nil {
 		return true
 	}
 
-	_, ok := o.FieldsSet[name]
-
-	return ok
+	return o.FieldsSet[name]
 }
 
 // Validate inspects the contents SlackOptions struct and returns an
@@ -136,6 +159,10 @@ func (o *SlackOptions) fieldSetShouldInclude(name string) bool {
 // no Hostname is specified). Validate also prepends a missing "#" to
 // the channel setting if the "#" character is not set.
 func (o *SlackOptions) Validate() error {
+	if o == nil {
+		return errors.New("slack options cannot be nil")
+	}
+
 	errs := []string{}
 	if o.Channel == "" {
 		errs = append(errs, "no channel specified")
@@ -146,7 +173,10 @@ func (o *SlackOptions) Validate() error {
 	}
 
 	if o.FieldsSet == nil {
-		o.FieldsSet = map[string]struct{}{}
+		o.FieldsSet = map[string]bool{}
+	}
+	if o.client == nil {
+		o.client = &slackClientImpl{}
 	}
 
 	if o.Hostname == "" {
@@ -158,8 +188,8 @@ func (o *SlackOptions) Validate() error {
 		}
 	}
 
-	if !strings.HasPrefix(o.Channel, "#") {
-		o.Channel = "#" + o.Channel
+	if !strings.HasPrefix(o.Channel, "#") && !strings.HasPrefix(o.Channel, "@") {
+		return errors.New("recipient must begin with '#' or '@'")
 	}
 
 	if len(errs) > 0 {
@@ -168,7 +198,9 @@ func (o *SlackOptions) Validate() error {
 	return nil
 }
 
-func (o *SlackOptions) getParams(m message.Composer) *slack.ChatPostMessageOpt {
+func (o *SlackOptions) produceMessage(m message.Composer) (string, *slack.ChatPostMessageOpt) {
+	var msg string
+
 	o.mutex.RLock()
 	defer o.mutex.RUnlock()
 
@@ -201,7 +233,7 @@ func (o *SlackOptions) getParams(m message.Composer) *slack.ChatPostMessageOpt {
 		fallbacks = append(fallbacks, fmt.Sprintf("priority=%s", p))
 		attachment.Fields = append(attachment.Fields,
 			&slack.AttachmentField{
-				Title: "Priority",
+				Title: "priority",
 				Value: p.String(),
 				Short: true,
 			})
@@ -209,14 +241,9 @@ func (o *SlackOptions) getParams(m message.Composer) *slack.ChatPostMessageOpt {
 
 	if o.Fields {
 		fields, ok := m.Raw().(message.Fields)
-
 		if ok {
 			for k, v := range fields {
-				if k == "msg" && v == m.String() {
-					continue
-				}
-
-				if o.fieldSetShouldInclude(k) {
+				if !o.fieldSetShouldInclude(k) {
 					continue
 				}
 
@@ -229,7 +256,11 @@ func (o *SlackOptions) getParams(m message.Composer) *slack.ChatPostMessageOpt {
 						Short: true,
 					})
 			}
+		} else {
+			msg = m.String()
 		}
+	} else {
+		msg = m.String()
 	}
 
 	if len(fallbacks) > 0 {
@@ -246,7 +277,27 @@ func (o *SlackOptions) getParams(m message.Composer) *slack.ChatPostMessageOpt {
 
 	}
 
-	return &slack.ChatPostMessageOpt{
+	return msg, &slack.ChatPostMessageOpt{
 		Attachments: []*slack.Attachment{&attachment},
 	}
+}
+
+////////////////////////////////////////////////////////////////////////
+//
+// interface wrapper for the slack client so that we can mock things out
+//
+////////////////////////////////////////////////////////////////////////
+
+type slackClient interface {
+	Create(string)
+	AuthTest() (*slack.AuthTestApiResponse, error)
+	ChatPostMessage(string, string, *slack.ChatPostMessageOpt) error
+}
+
+type slackClientImpl struct {
+	*slack.Slack
+}
+
+func (c *slackClientImpl) Create(token string) {
+	c.Slack = slack.New(token)
 }

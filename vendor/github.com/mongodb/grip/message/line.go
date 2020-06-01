@@ -8,9 +8,9 @@ import (
 )
 
 type lineMessenger struct {
-	Lines   []interface{} `yaml:"lines" json:"lines" bson:"lines"`
+	lines   []interface{}
 	Base    `bson:"metadata" json:"metadata" yaml:"metadata"`
-	message string
+	Message string `bson:"message" json:"message" yaml:"message"`
 }
 
 // NewLineMessage is a basic constructor for a type that, given a
@@ -29,7 +29,19 @@ func NewLine(args ...interface{}) Composer {
 	m := &lineMessenger{}
 	for _, arg := range args {
 		if arg != nil {
-			m.Lines = append(m.Lines, arg)
+			m.lines = append(m.lines, arg)
+		}
+	}
+
+	return m
+}
+
+func newLinesFromStrings(p level.Priority, args []string) Composer {
+	m := &lineMessenger{}
+	_ = m.SetPriority(p)
+	for _, arg := range args {
+		if arg != "" {
+			m.lines = append(m.lines, arg)
 		}
 	}
 
@@ -37,18 +49,30 @@ func NewLine(args ...interface{}) Composer {
 }
 
 func (l *lineMessenger) Loggable() bool {
-	return len(l.Lines) > 0
+	if len(l.lines) <= 0 {
+		return false
+	}
+
+	for idx := range l.lines {
+		if l.lines[idx] != "" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (l *lineMessenger) String() string {
-	if l.message == "" {
-		l.message = strings.Trim(fmt.Sprintln(l.Lines...), "\n ")
+	if l.Message == "" {
+		l.Message = strings.Trim(fmt.Sprintln(l.lines...), "\n ")
 	}
 
-	return l.message
+	return l.Message
 }
 
 func (l *lineMessenger) Raw() interface{} {
 	_ = l.Collect()
+	_ = l.String()
+
 	return l
 }
