@@ -129,7 +129,6 @@ endif
 $(buildDir)/output.%.lint: $(buildDir)/run-linter .FORCE
 	@$(lintEnvVars) ./$< --output=$@ --lintBin=$(buildDir)/golangci-lint --packages='$*'
 # end test and coverage artifacts
-# end basic development operations
 
 # start module management targets
 mod-tidy:
