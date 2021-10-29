@@ -8,8 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mongodb/grip"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -26,19 +25,18 @@ func TestCacheSuite(t *testing.T) {
 }
 
 func (s *CacheSuite) SetupSuite() {
-	s.require = s.Require()
 	dir, err := ioutil.TempDir("", uuid.NewV4().String())
-	s.require.NoError(err)
+	s.Require().NoError(err)
 	s.tempDir = dir
 }
 
 func (s *CacheSuite) TearDownSuite() {
-	grip.CatchError(os.RemoveAll(s.tempDir))
+	s.NoError(os.RemoveAll(s.tempDir))
 }
 
 func (s *CacheSuite) SetupTest() {
 	s.cache = NewCache()
-	s.require.Len(s.cache.table, 0)
+	s.Require().Len(s.cache.table, 0)
 }
 
 func (s *CacheSuite) TestInitialStateOfCacheObjectIsEmpty() {
@@ -71,9 +69,12 @@ func (s *CacheSuite) TestMutlithreadedFileAdds() {
 	s.Equal(0, s.cache.Size())
 
 	wg := &sync.WaitGroup{}
+	var totalSize int
 	for i := 0; i < 40; i++ {
 		fn := filepath.Join(s.tempDir, uuid.NewV4().String())
-		s.NoError(ioutil.WriteFile(fn, []byte(fmt.Sprintf("in %s is it %d", fn, i)), 0644))
+		content := fmt.Sprintf("in %s is it %d", fn, i)
+		s.NoError(ioutil.WriteFile(fn, []byte(content), 0644))
+		totalSize += len(content)
 		wg.Add(1)
 		go func(f string) {
 			s.NoError(s.cache.AddFile(f))
@@ -83,7 +84,7 @@ func (s *CacheSuite) TestMutlithreadedFileAdds() {
 	wg.Wait()
 
 	s.Equal(40, s.cache.Count())
-	s.Equal(5710, s.cache.Size())
+	s.Equal(totalSize, s.cache.Size())
 }
 
 func (s *CacheSuite) TestAddStatRejectsFilesWithNilStats() {

@@ -40,7 +40,7 @@ func (f *FileObject) Update() error {
 	if stat.IsDir() {
 		size, err := dirSize(f.Path)
 		if err != nil {
-			return errors.Wrapf(err, "problem finding size of directory %d", f.Path)
+			return errors.Wrapf(err, "problem finding size of directory %s", f.Path)
 		}
 
 		f.Size = int(size)
