@@ -26,7 +26,7 @@ type Cache struct {
 	table map[string]*FileObject
 }
 
-// NewCache returns an initalized but unpopulated cache. Use the
+// NewCache returns an initialized but unpopulated cache. Use the
 // DirectoryContents and TreeContents constructors to populate a
 // cache.
 func NewCache() *Cache {
