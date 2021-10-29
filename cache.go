@@ -26,7 +26,7 @@ type Cache struct {
 	table map[string]*FileObject
 }
 
-// NewCache returns an initalized but unpopulated cache. Use the
+// NewCache returns an initialized but unpopulated cache. Use the
 // DirectoryContents and TreeContents constructors to populate a
 // cache.
 func NewCache() *Cache {
@@ -69,7 +69,7 @@ func (c *Cache) AddStat(fn string, stat os.FileInfo) error {
 	if stat.IsDir() {
 		size, err := dirSize(fn)
 		if err != nil {
-			return errors.Wrapf(err, "problem finding size of directory %d", fn)
+			return errors.Wrapf(err, "problem finding size of directory %s", fn)
 		}
 
 		f.Size = int(size)
