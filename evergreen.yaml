@@ -67,6 +67,16 @@ tasks:
     tags: ["report"]
     name: lint-lru
 
+  - name: verify-mod-tidy
+    tags: ["report"]
+    commands:
+      - command: git.get_project
+        type: system
+        params:
+          directory: lru
+      - func: run-make
+        vars: { target: "${task_name}" }
+
 #######################################
 #           Buildvariants             #
 #######################################
