@@ -19,8 +19,7 @@ func (c *Cache) Prune(maxSize int, exclude []string, dryRun bool) error {
 		}
 
 		if err := c.prunePass(exclude, dryRun); err != nil {
-			grip.Noticef("cache pruning ended early due to error, (size=%d, count=%d)",
-				c.Size(), c.Count())
+			grip.Noticef("cache pruning ended early due to error, (size=%d, count=%d)", c.Size(), c.Count())
 			catcher.Add(err)
 		}
 	}
@@ -44,7 +43,7 @@ func (c *Cache) underQuota(maxSize int) bool {
 func (c *Cache) prunePass(exclude []string, dryRun bool) error {
 	f, err := c.Pop()
 	if err != nil {
-		return errors.Wrap(err, "problem retrieving item from cache")
+		return errors.Wrap(err, "retrieving item from cache")
 	}
 
 	for _, ex := range exclude {
@@ -61,7 +60,7 @@ func (c *Cache) prunePass(exclude []string, dryRun bool) error {
 	}
 
 	if err := f.Remove(); err != nil {
-		return errors.Wrap(err, "problem removing item")
+		return errors.Wrap(err, "removing item")
 	}
 
 	grip.Infof("removed '%s' (%dMB) from the cache", f.Path, f.Size/1024/1024)

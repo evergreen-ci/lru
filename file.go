@@ -32,7 +32,7 @@ func NewFile(fn string, info os.FileInfo) *FileObject {
 func (f *FileObject) Update() error {
 	stat, err := os.Stat(f.Path)
 	if os.IsNotExist(err) {
-		return errors.Errorf("file %s no longer exists", f.Path)
+		return errors.Errorf("file '%s' no longer exists", f.Path)
 	}
 
 	f.Time = stat.ModTime()
@@ -40,7 +40,7 @@ func (f *FileObject) Update() error {
 	if stat.IsDir() {
 		size, err := dirSize(f.Path)
 		if err != nil {
-			return errors.Wrapf(err, "problem finding size of directory %s", f.Path)
+			return errors.Wrapf(err, "finding size of directory '%s'", f.Path)
 		}
 
 		f.Size = int(size)
@@ -72,7 +72,7 @@ func dirSize(path string) (int64, error) {
 	})
 
 	if err != nil {
-		return 0, errors.Wrapf(err, "problem getting size of %s", path)
+		return 0, errors.Wrapf(err, "getting size of path '%s'", path)
 	}
 
 	return size, nil

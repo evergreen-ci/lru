@@ -57,7 +57,7 @@ func (c *Cache) Count() int {
 // already exists in the chace.
 func (c *Cache) AddStat(fn string, stat os.FileInfo) error {
 	if stat == nil {
-		return errors.Errorf("file %s does not have a valid stat", fn)
+		return errors.Errorf("file '%s' does not have a valid stat", fn)
 	}
 
 	f := &FileObject{
@@ -69,13 +69,13 @@ func (c *Cache) AddStat(fn string, stat os.FileInfo) error {
 	if stat.IsDir() {
 		size, err := dirSize(fn)
 		if err != nil {
-			return errors.Wrapf(err, "problem finding size of directory %s", fn)
+			return errors.Wrapf(err, "finding size of directory '%s'", fn)
 		}
 
 		f.Size = int(size)
 	}
 
-	return errors.Wrapf(c.Add(f), "problem adding file (%s) by info", fn)
+	return errors.Wrapf(c.Add(f), "adding file '%s' by info", fn)
 }
 
 // AddFile takes a fully qualified filename and adds it to the cache,
@@ -85,10 +85,10 @@ func (c *Cache) AddStat(fn string, stat os.FileInfo) error {
 func (c *Cache) AddFile(fn string) error {
 	stat, err := os.Stat(fn)
 	if os.IsNotExist(err) {
-		return errors.Wrapf(err, "file %s does not exist", fn)
+		return errors.Wrapf(err, "file '%s' does not exist", fn)
 	}
 
-	return errors.Wrap(c.AddStat(fn, stat), "problem adding file")
+	return errors.Wrap(c.AddStat(fn, stat), "adding file")
 }
 
 // Add takes a defined FileObject and adds it to the cache, returning
@@ -98,8 +98,7 @@ func (c *Cache) Add(f *FileObject) error {
 	defer c.mutex.Unlock()
 
 	if _, ok := c.table[f.Path]; ok {
-		return errors.Errorf("cannot add object '%s' to cache: it already exists: %s",
-			f.Path, "use Update() instead")
+		return errors.Errorf("path '%s' already exists in the cache: %s", f.Path)
 	}
 
 	c.size += f.Size
@@ -118,8 +117,7 @@ func (c *Cache) Update(f *FileObject) error {
 
 	existing, ok := c.table[f.Path]
 	if !ok {
-		return errors.Errorf("cannot update '%s' in cache: it does not exist: %s",
-			f.Path, "use Add() instead")
+		return errors.Errorf("path '%s' does not exist in the cache", f.Path)
 	}
 
 	c.size -= existing.Size
@@ -138,7 +136,7 @@ func (c *Cache) Pop() (*FileObject, error) {
 	defer c.mutex.Unlock()
 
 	if c.heap.Len() == 0 {
-		return nil, errors.New("cache listing is empty")
+		return nil, errors.New("cache is empty")
 	}
 
 	f := heap.Pop(&c.heap).(*FileObject)
