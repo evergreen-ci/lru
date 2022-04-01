@@ -98,7 +98,7 @@ func (c *Cache) Add(f *FileObject) error {
 	defer c.mutex.Unlock()
 
 	if _, ok := c.table[f.Path]; ok {
-		return errors.Errorf("path '%s' already exists in the cache: %s", f.Path)
+		return errors.Errorf("path '%s' already exists in the cache", f.Path)
 	}
 
 	c.size += f.Size
