@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/mongodb/grip"
+	"github.com/mongodb/grip/message"
 	"github.com/pkg/errors"
 )
 
@@ -19,7 +20,11 @@ func (c *Cache) Prune(maxSize int, exclude []string, dryRun bool) error {
 		}
 
 		if err := c.prunePass(exclude, dryRun); err != nil {
-			grip.Noticef("cache pruning ended early due to error, (size=%d, count=%d)", c.Size(), c.Count())
+			grip.Notice(message.WrapError(err, message.Fields{
+				"message": "cache pruning ended early due to error",
+				"size":    c.Size(),
+				"count":   c.Count(),
+			}))
 			catcher.Add(err)
 		}
 	}
