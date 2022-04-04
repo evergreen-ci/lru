@@ -17,13 +17,13 @@ import (
 func DirectoryContents(path string, skipDir bool) (*Cache, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, errors.Wrapf(err, "problem getting absolute path for '%s'", path)
+		return nil, errors.Wrapf(err, "getting absolute path for path '%s'", path)
 	}
 	path = absPath
 
 	infos, err := ioutil.ReadDir(path)
 	if err != nil {
-		return nil, errors.Wrapf(err, "problem getting directory contents for '%s'", path)
+		return nil, errors.Wrapf(err, "getting directory contents for path '%s'", path)
 	}
 
 	c := NewCache()
@@ -40,12 +40,10 @@ func DirectoryContents(path string, skipDir bool) (*Cache, error) {
 	}
 
 	if catcher.HasErrors() {
-		return nil, errors.Wrapf(err, "problem building cache with %d items (of %d)",
-			catcher.Len(), c.Count())
+		return nil, errors.Wrapf(err, "building cache with %d items (of %d)", catcher.Len(), c.Count())
 	}
 
-	grip.Debugf("created new cache, with %d items and %d bytes",
-		c.Count(), c.Size())
+	grip.Debugf("created new cache, with %d items and %d bytes", c.Count(), c.Size())
 
 	return c, nil
 }
@@ -55,7 +53,7 @@ func DirectoryContents(path string, skipDir bool) (*Cache, error) {
 func TreeContents(root string) (*Cache, error) {
 	absPath, err := filepath.Abs(root)
 	if err != nil {
-		return nil, errors.Wrapf(err, "problem getting absolute path for '%s'", root)
+		return nil, errors.Wrapf(err, "getting absolute path for path '%s'", root)
 	}
 	root = absPath
 
@@ -77,12 +75,10 @@ func TreeContents(root string) (*Cache, error) {
 	}))
 
 	if catcher.HasErrors() {
-		return nil, errors.Wrapf(err, "problem building cache with %d items (of %d)",
-			catcher.Len(), c.Count())
+		return nil, errors.Wrapf(err, "building cache with %d items (of %d)", catcher.Len(), c.Count())
 	}
 
-	grip.Debugf("created new cache, with %d items and %d bytes",
-		c.Count(), c.Size())
+	grip.Debugf("created new cache, with %d items and %d bytes", c.Count(), c.Size())
 
 	return c, nil
 }
