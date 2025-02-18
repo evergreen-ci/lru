@@ -1,6 +1,6 @@
 module github.com/evergreen-ci/lru
 
-go 1.20
+go 1.24
 
 require (
 	github.com/mongodb/grip v0.0.0-20211028155128-86e6e47bafdb
