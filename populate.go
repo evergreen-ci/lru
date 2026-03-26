@@ -1,6 +1,7 @@
 package lru
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -15,6 +16,8 @@ import (
 // directories in the cache, lru includes the aggregate size of files
 // in the directory.
 func DirectoryContents(path string, skipDir bool) (*Cache, error) {
+	ctx := context.Background()
+
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting absolute path for path '%s'", path)
@@ -43,7 +46,7 @@ func DirectoryContents(path string, skipDir bool) (*Cache, error) {
 		return nil, errors.Wrapf(err, "building cache with %d items (of %d)", catcher.Len(), c.Count())
 	}
 
-	grip.Debugf("created new cache, with %d items and %d bytes", c.Count(), c.Size())
+	grip.Debugf(ctx, "created new cache, with %d items and %d bytes", c.Count(), c.Size())
 
 	return c, nil
 }
@@ -51,6 +54,8 @@ func DirectoryContents(path string, skipDir bool) (*Cache, error) {
 // TreeContents adds all file system items, excluding directories, to
 // a cache object.
 func TreeContents(root string) (*Cache, error) {
+	ctx := context.Background()
+
 	absPath, err := filepath.Abs(root)
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting absolute path for path '%s'", root)
@@ -78,7 +83,7 @@ func TreeContents(root string) (*Cache, error) {
 		return nil, errors.Wrapf(err, "building cache with %d items (of %d)", catcher.Len(), c.Count())
 	}
 
-	grip.Debugf("created new cache, with %d items and %d bytes", c.Count(), c.Size())
+	grip.Debugf(ctx, "created new cache, with %d items and %d bytes", c.Count(), c.Size())
 
 	return c, nil
 }
