@@ -1,6 +1,7 @@
 package lru
 
 import (
+	"context"
 	"strings"
 
 	"github.com/mongodb/grip"
@@ -13,6 +14,7 @@ import (
 // bytes.)
 func (c *Cache) Prune(maxSize int, exclude []string, dryRun bool) error {
 	catcher := grip.NewCatcher()
+	ctx := context.Background()
 
 	for {
 		if c.underQuota(maxSize) {
@@ -20,7 +22,7 @@ func (c *Cache) Prune(maxSize int, exclude []string, dryRun bool) error {
 		}
 
 		if err := c.prunePass(exclude, dryRun); err != nil {
-			grip.Notice(message.WrapError(err, message.Fields{
+			grip.Notice(ctx, message.WrapError(err, message.Fields{
 				"message": "cache pruning ended early due to error",
 				"size":    c.Size(),
 				"count":   c.Count(),
@@ -46,6 +48,8 @@ func (c *Cache) underQuota(maxSize int) bool {
 }
 
 func (c *Cache) prunePass(exclude []string, dryRun bool) error {
+	ctx := context.Background()
+
 	f, err := c.Pop()
 	if err != nil {
 		return errors.Wrap(err, "retrieving item from cache")
@@ -53,13 +57,13 @@ func (c *Cache) prunePass(exclude []string, dryRun bool) error {
 
 	for _, ex := range exclude {
 		if strings.HasSuffix(f.Path, ex) {
-			grip.Infof("file '%s' is excluded from pruning", f.Path)
+			grip.Infof(ctx, "file '%s' is excluded from pruning", f.Path)
 			return nil
 		}
 	}
 
 	if dryRun {
-		grip.Noticef("[dry-run]: would delete '%s' (%dMB)", f.Path,
+		grip.Noticef(ctx, "[dry-run]: would delete '%s' (%dMB)", f.Path,
 			f.Size/1024/1024)
 		return nil
 	}
@@ -68,6 +72,6 @@ func (c *Cache) prunePass(exclude []string, dryRun bool) error {
 		return errors.Wrap(err, "removing item")
 	}
 
-	grip.Infof("removed '%s' (%dMB) from the cache", f.Path, f.Size/1024/1024)
+	grip.Infof(ctx, "removed '%s' (%dMB) from the cache", f.Path, f.Size/1024/1024)
 	return nil
 }
